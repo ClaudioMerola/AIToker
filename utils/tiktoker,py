@@ -1,0 +1,72 @@
+from playwright.async_api import async_playwright  # pylint: disable=unused-import
+from playwright.sync_api import ViewportSize, sync_playwright
+import json
+import time
+import datetime
+import config
+
+# Function to post a video to TikTok using Playwright.
+def func_tiktok_post(video: str, desc: str):
+    width = 1280
+    height = 720
+    with sync_playwright() as p:
+        print(f"{str(datetime.datetime.utcnow().strftime('%m/%d/%Y - %I:%M:%S'))} - Launching Headless Browser...")
+
+        cookie_file = open((config.PATH_TO_SCREENSHOT+"cookies.json"), encoding="utf-8")
+        browser = p.chromium.launch(
+            headless=False,
+            channel="chrome"
+        )  
+        dsf = (1080 // 600) + 1
+
+        context = browser.new_context(
+            locale="en-us",
+            color_scheme="dark",
+            viewport=ViewportSize(width=width, height=height),
+            device_scale_factor=dsf,
+            java_script_enabled=True,
+        )
+        
+        cookies = json.load(cookie_file)
+        cookie_file.close()
+
+        context.add_cookies(cookies)  # load preference cookies
+
+        page = context.new_page()
+        with page.expect_file_chooser() as fc_info:
+            page.set_viewport_size({'width': width, 'height':height})
+            page.goto('https://www.tiktok.com/creator-center/upload?from=upload', timeout=0)        
+            page.wait_for_load_state("domcontentloaded")
+
+            print(f"{str(datetime.datetime.utcnow().strftime('%m/%d/%Y - %I:%M:%S'))} - Posting Phase: " + "\033[42m" + 'Uploading Video' + "\033[0m")
+
+            time.sleep(15)
+
+            locator = page.frame_locator("iframe").get_by_text("Select files")
+            locator.click()
+
+            #page.pause()
+
+        file_chooser = fc_info.value
+        print(file_chooser)
+        file_chooser.set_files(video)
+
+        page.wait_for_load_state("domcontentloaded")
+        time.sleep(5)
+        print("Posting Phase: " + "\033[42m" + 'Setting Description' + "\033[0m")
+        description = page.frame_locator("iframe").get_by_role("combobox")
+        time.sleep(1)
+        description.fill(desc)
+        time.sleep(2)
+        page.wait_for_load_state("domcontentloaded")
+        page.keyboard.press("Escape")
+
+        print("Posting Phase: " + "\033[42m" + 'Posting' + "\033[0m")
+
+        post = page.frame_locator("iframe").get_by_role("button", name="Post")
+        post.click(delay=25, position={"x": 20, "y": 15})
+        page.wait_for_load_state(timeout=20)
+        time.sleep(40)
+
+        context.close()
+        browser.close()
